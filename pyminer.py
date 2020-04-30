@@ -1,21 +1,3 @@
-#!/usr/bin/python
-#
-# Copyright 2011 Jeff Garzik
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; see the file COPYING.  If not, write to
-# the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
-#
-
 import time
 import json
 import pprint
@@ -23,12 +5,12 @@ import hashlib
 import struct
 import re
 import base64
-import httplib
+import http.client 
 import sys
 from multiprocessing import Process
 
 ERR_SLEEP = 15
-MAX_NONCE = 1000000L
+MAX_NONCE = 1000000
 
 settings = {}
 pp = pprint.PrettyPrinter(indent=4)
@@ -39,7 +21,7 @@ class BitcoinRPC:
 	def __init__(self, host, port, username, password):
 		authpair = "%s:%s" % (username, password)
 		self.authhdr = "Basic %s" % (base64.b64encode(authpair))
-		self.conn = httplib.HTTPConnection(host, port, False, 30)
+		self.conn = http.client.HTTPConnection(host, port, False, 30)
 	def rpc(self, method, params=None):
 		self.OBJID += 1
 		obj = { 'version' : '1.1',
@@ -55,18 +37,18 @@ class BitcoinRPC:
 
 		resp = self.conn.getresponse()
 		if resp is None:
-			print "JSON-RPC: no response"
+			print("JSON-RPC: no response")
 			return None
 
 		body = resp.read()
 		resp_obj = json.loads(body)
 		if resp_obj is None:
-			print "JSON-RPC: cannot JSON-decode body"
+			print("JSON-RPC: cannot JSON-decode body")
 			return None
 		if 'error' in resp_obj and resp_obj['error'] != None:
 			return resp_obj['error']
 		if 'result' not in resp_obj:
-			print "JSON-RPC: no result in object"
+			print("JSON-RPC: no result in object")
 			return None
 
 		return resp_obj['result']
@@ -76,7 +58,7 @@ class BitcoinRPC:
 		return self.rpc('getwork', data)
 
 def uint32(x):
-	return x & 0xffffffffL
+	return x & 0xffffffff
 
 def bytereverse(x):
 	return uint32(( ((x) << 24) | (((x) << 8) & 0x00ff0000) |
@@ -147,11 +129,11 @@ class Miner:
 
 			# proof-of-work test:  hash < target
 			if l < target:
-				print time.asctime(), "PROOF-OF-WORK found: %064x" % (l,)
+				print(time.asctime(), "PROOF-OF-WORK found: %064x" % (l,))
 				return (nonce + 1, nonce_bin)
 			else:
-				print time.asctime(), "PROOF-OF-WORK false positive %064x" % (l,)
-#				return (nonce + 1, nonce_bin)
+				print(time.asctime(), "PROOF-OF-WORK false positive %064x" % (l,))
+                                #return (nonce + 1, nonce_bin)
 
 		return (nonce + 1, None)
 
@@ -161,7 +143,7 @@ class Miner:
 		solution = original_data[:152] + nonce + original_data[160:256]
 		param_arr = [ solution ]
 		result = rpc.getwork(param_arr)
-		print time.asctime(), "--> Upstream RPC result:", result
+		print(time.asctime(), "--> Upstream RPC result:", result)
 
 	def iterate(self, rpc):
 		work = rpc.getwork()
@@ -182,13 +164,13 @@ class Miner:
 
 		self.max_nonce = long(
 			(hashes_done * settings['scantime']) / time_diff)
-		if self.max_nonce > 0xfffffffaL:
-			self.max_nonce = 0xfffffffaL
+		if self.max_nonce > 0xfffffffa:
+			self.max_nonce = 0xfffffffa
 
 		if settings['hashmeter']:
-			print "HashMeter(%d): %d hashes, %.2f Khash/sec" % (
+			print("HashMeter(%d): %d hashes, %.2f Khash/sec" % (
 			      self.id, hashes_done,
-			      (hashes_done / 1000.0) / time_diff)
+			      (hashes_done / 1000.0) / time_diff))
 
 		if nonce_bin is not None:
 			self.submit_work(rpc, work['data'], nonce_bin)
@@ -208,7 +190,7 @@ def miner_thread(id):
 
 if __name__ == '__main__':
 	if len(sys.argv) != 2:
-		print "Usage: pyminer.py CONFIG-FILE"
+		print("Usage: pyminer.py CONFIG-FILE")
 		sys.exit(1)
 
 	f = open(sys.argv[1])
@@ -234,15 +216,15 @@ if __name__ == '__main__':
 	if 'hashmeter' not in settings:
 		settings['hashmeter'] = 0
 	if 'scantime' not in settings:
-		settings['scantime'] = 30L
+		settings['scantime'] = 30
 	if 'rpcuser' not in settings or 'rpcpass' not in settings:
-		print "Missing username and/or password in cfg file"
+		print("Missing username and/or password in cfg file")
 		sys.exit(1)
 
 	settings['port'] = int(settings['port'])
 	settings['threads'] = int(settings['threads'])
 	settings['hashmeter'] = int(settings['hashmeter'])
-	settings['scantime'] = long(settings['scantime'])
+	settings['scantime'] = settings['scantime']
 
 	thr_list = []
 	for thr_id in range(settings['threads']):
@@ -251,13 +233,13 @@ if __name__ == '__main__':
 		thr_list.append(p)
 		time.sleep(1)			# stagger threads
 
-	print settings['threads'], "mining threads started"
+	print(settings['threads'], "mining threads started")
 
-	print time.asctime(), "Miner Starts - %s:%s" % (settings['host'], settings['port'])
+	print(time.asctime(), "Miner Starts - %s:%s" % (settings['host'], settings['port']))
 	try:
 		for thr_proc in thr_list:
 			thr_proc.join()
 	except KeyboardInterrupt:
 		pass
-	print time.asctime(), "Miner Stops - %s:%s" % (settings['host'], settings['port'])
+	print(time.asctime(), "Miner Stops - %s:%s" % (settings['host'], settings['port']))
 
